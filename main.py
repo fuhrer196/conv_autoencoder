@@ -34,19 +34,19 @@ data            = sio.loadmat("inp.mat")
 x = data["x"]
 y = data["y"]
 
-X = tf.placeholder("floa32", [None, 64])
-Y = tf.placeholder("floa32", [None, 64])
-
+X = tf.placeholder("float32", [None, 64,1])
+Y = tf.placeholder("float32", [None, 64,1])
+conv1 = []; pool1 = []; conv2 = []; pool2 = []; fc1=[];
 for i, Dim in enumerate([X,Y]):
-    conv1[i]  = tf.layers.conv1d(Dim, p, w, data_format="channels_last")
-    pool1[i]  = tf.layers.average_pooling1d(conv1[i],2,2)
-    conv2[i]  = tf.layers.conv1d(pool1[i],p*(p-1)/2,w)
-    pool2[i]  = tf.layers.average_pooling1d(conv2[i],4,4)
+    conv1.append(tf.layers.conv1d(Dim, p, w, data_format="channels_last"))
+    pool1.append(tf.layers.average_pooling1d(conv1[i],2,2))
+    conv2.append(tf.layers.conv1d(pool1[i],p*(p-1)/2,w))
+    pool2.append(tf.layers.average_pooling1d(conv2[i],4,4))
     #for channel in X[]:
-    fc1[i]    = tf.layers.dense(pool2[i],8)
+    fc1.append(tf.layers.dense(pool2[i],8))
     #fc1.unroll()
 
-enc = tf.layers.dense(tf.concat([fc1[0],fc1[1]]),20)
+enc = tf.layers.dense(tf.concat([fc1[0],fc1[1]],0),20)
 
 #DECODE
 
@@ -129,17 +129,18 @@ f = open('costs' +"_"+hostname+"_"+ str(parser.parse_args().res_n), 'w')
 
 costs = []
 """
+global_step = tf.Variable(0, name='global_step', trainable=False)
 hooks = []
-with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(n_hidden_5)+"/",
-                                       hooks=hooks) as mon_sess:
+with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave/",
+                                       hooks=None) as mon_sess:
 #try:
 #    saver.restore(sess,"./savedSession"+str(n_hidden_5)+"/model")
 #except:
 #    pass
 
     while not mon_sess.should_stop():
-        c =  mon_sess.run([enc], feed_dict={X: x[:10]})
-        print(c)
+        enc_val =  mon_sess.run([enc], feed_dict={X: np.transpose([np.transpose(x[:10])]),Y: np.transpose([np.transpose(y[:10])])})
+        print(enc_val)
         pdb.set_trace()
         #costs.append(c)
         #print(hostname +": "+ str(c))
