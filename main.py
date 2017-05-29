@@ -95,29 +95,27 @@ def after_run(self, run_context, fuckit):
     if global_step.eval(session=sess)%100 == 0:
         y_predict = sess.run(y_pred, feed_dict={X: train})
         y_predict_test = sess.run(y_pred, feed_dict={X: test})
-        
-        tosave = {  'training_y_act':train, 
-                'training_y_pred':y_predict, 
-                'type':"Leaky ReLu 128(input) -> "+str(n_hidden_1)+" -> "+str(n_hidden_2)+"-> "+str(n_hidden_3)+"-> "+str(n_hidden_4)+"-> "+str(n_hidden_5)+" (->"+ str(n_hidden_1) + "... Decode)", 
-                'learning_rate': learning_rate, 
-                'training_epochs':training_epochs, 
-                'alpha_reg': alpha, 
-                'test_y_act':test, 
-                'test_y_pred':y_predict_test, 
+        tosave = {  'training_y_act':train,
+                'training_y_pred':y_predict,
+                'type':"Leaky ReLu 128(input) -> "+str(n_hidden_1)+" -> "+str(n_hidden_2)+"-> "+str(n_hidden_3)+"-> "+str(n_hidden_4)+"-> "+str(n_hidden_5)+" (->"+ str(n_hidden_1) + "... Decode)",
+                'learning_rate': learning_rate,
+                'training_epochs':training_epochs,
+                'alpha_reg': alpha,
+                'test_y_act':test,
+                'test_y_pred':y_predict_test,
                 'costs':costs}
         sio.savemat("live" + str(parser.parse_args().res_n) + ".mat",tosave)
 def end(self, sess):
     y_predict = sess.run(y_pred, feed_dict={X: train})
     y_predict_test = sess.run(y_pred, feed_dict={X: test})
-    
-    tosave = {  'training_y_act':train, 
-            'training_y_pred':y_predict, 
-            'type':"Leaky ReLu 128(input) -> "+str(n_hidden_1)+" -> "+str(n_hidden_2)+"-> "+str(n_hidden_3)+"-> "+str(n_hidden_4)+"-> "+str(n_hidden_5)+" (->"+ str(n_hidden_1) + "... Decode)", 
-            'learning_rate': learning_rate, 
-            'training_epochs':training_epochs, 
-            'alpha_reg': alpha, 
-            'test_y_act':test, 
-            'test_y_pred':y_predict_test, 
+    tosave = {  'training_y_act':train,
+            'training_y_pred':y_predict,
+            'type':"Leaky ReLu 128(input) -> "+str(n_hidden_1)+" -> "+str(n_hidden_2)+"-> "+str(n_hidden_3)+"-> "+str(n_hidden_4)+"-> "+str(n_hidden_5)+" (->"+ str(n_hidden_1) + "... Decode)",
+            'learning_rate': learning_rate,
+            'training_epochs':training_epochs,
+            'alpha_reg': alpha,
+            'test_y_act':test,
+            'test_y_pred':y_predict_test,
             'costs':costs}
     sio.savemat(save_to+".mat",tosave)
     saver.save(sess, "./savedSession"+str(n_hidden_5)+"/model",global_step = global_step)
@@ -139,7 +137,7 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave/",
 #    pass
 
     while not mon_sess.should_stop():
-        enc_val =  mon_sess.run([enc], feed_dict={X: np.transpose([np.transpose(x[:10])]),Y: np.transpose([np.transpose(y[:10])])})
+        f1, enc_val =  mon_sess.run([fc1, enc], feed_dict={X: np.transpose([np.transpose(x[:10])]),Y: np.transpose([np.transpose(y[:10])])})
         print(enc_val)
         pdb.set_trace()
         #costs.append(c)
