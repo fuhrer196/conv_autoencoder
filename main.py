@@ -52,10 +52,10 @@ reshaped    = tf.reshape( conc , [batch_size,p*(p-1)*8])
 enc = tf.layers.dense( reshaped,20 )
 
 #DECODER
-fc_deconv = tf.split(tf.layers.dense(enc, 16*p*(p-1)/2), num_or_size_splits=2, axis=1)
-fc_deconv2 = [tf.layers.dense(i, 8*p*(p-1)/2) for i in fc_deconv]
+fc_deconv = tf.split(tf.layers.dense(enc, int(16*p*(p-1)/2)), num_or_size_splits=2, axis=1)
+fc_deconv2 = [tf.layers.dense(i, int(8*p*(p-1)/2)) for i in fc_deconv]
 
-enc_2 = [tf.reshape(i, [batch_size, 8, 1, p*(p-1)/2]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
+enc_2 = [tf.reshape(i, [batch_size, 8, 1, int(p*(p-1)/2)]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
 
 deconv1 = [0, 0]
 deconv2 = [0, 0]
@@ -63,7 +63,7 @@ filter_deconv2 = [0, 0]
 filter_deconv1 = [0, 0]
 
 for i in xrange(2):
-    filter_deconv1[i] = tf.Variable(tf.random_normal([w, 1, p, p*(p-1)/2], stddev=0.5))
+    filter_deconv1[i] = tf.Variable(tf.random_normal([w, 1, p, int(p*(p-1)/2)], stddev=0.5))
     deconv1[i] = tf.nn.conv2d_transpose(enc_2[i], filter_deconv1[i], output_shape=[batch_size, 32, 1, p], strides=[1, 4, 4, 1])
     filter_deconv2[i] = tf.Variable(tf.random_normal([w, 1, 1, p], stddev=0.5))
     deconv2[i] = tf.nn.conv2d_transpose(deconv1[i], filter_deconv2[i], output_shape=[batch_size, 64, 1, 1], strides=[1, 2, 2, 1])
