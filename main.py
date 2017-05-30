@@ -57,7 +57,7 @@ enc = tf.layers.dense( reshaped, 20, kernel_regularizer=regularizer)
 fc_deconv = tf.split(tf.layers.dense(enc, int(16*p*(p-1)/2), kernel_regularizer=regularizer), num_or_size_splits=2, axis=1)
 fc_deconv2 = [tf.layers.dense(i, int(8*p*(p-1)/2), kernel_regularizer=regularizer) for i in fc_deconv]
 
-enc_2 = [tf.reshape(i, [batch_size, 8, 1, int(p*(p-1)/2)]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
+dec_1 = [tf.reshape(i, [batch_size, 8, 1, int(p*(p-1)/2)]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
 
 deconv1 = [0, 0]
 deconv2 = [0, 0]
@@ -74,43 +74,34 @@ for i in xrange(2):
     tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES,regularizer(filter_deconv1[i]))
     tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES,regularizer(filter_deconv2[i]))
 
-decX = tf.reshape(deconv2[0], [batch_size, 64])
-decY = tf.reshape(deconv2[1], [batch_size, 64])
 reg_term = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
-#y_true = tf.concat(X,Y)
-#y_pred = tf.concat(decX, decY)
-#
-#x        = tf.slice(y_pred,[0,0],[-1,64])
-#y        = tf.slice(y_pred,[0,64], [-1,64])
-#IK       = np.fft.fftfreq(64)*1j
-#IK       = IK.astype(np.dtype('complex64'))
-#temp     = tf.complex(y_pred,0.0)
-#temp2    = tf.multiply(IK,tf.fft(tf.slice(temp,[0,0],[-1,64])))
-#dbydx    = tf.real(tf.ifft(temp2))
-#dbydy    = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.slice(tf.complex(y_pred,0.0),[0, 64],[-1,64])))))
-#
-#length   = tf.reduce_sum(tf.sqrt(tf.add(tf.square(dbydx),tf.square(dbydy))))
-#area     = tf.reduce_sum(tf.add(tf.multiply(x,dbydy),-1*tf.multiply(y,dbydx)))
-#
-#r_x      = tf.slice(y_true,[0,0],[-1,64])
-#r_y      = tf.slice(y_true,[0,64], [-1,64])
-#r_dbydx  = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.slice(tf.complex(y_true,0.0),[0,0],[-1, 64])))))
-#r_dbydy  = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.slice(tf.complex(y_true,0.0),[0, 64],[-1,64])))))
-#r_length = tf.reduce_sum(tf.sqrt(tf.add(tf.square(r_dbydx),tf.square(r_dbydy))))
-#r_area   = tf.reduce_sum(tf.add(tf.multiply(r_x,r_dbydy),-1*tf.multiply(r_y,r_dbydx)))
-#
-#c1       = tf.add_n([tf.reduce_mean(tf.pow(y_true - y_pred, 2)), alpha*regulariser])
-#c3       = parser.parse_args().length*(tf.pow(length-r_length,2))
-#c2       = parser.parse_args().roughness*tf.add_n([tf.reduce_mean(tf.square(dbydx)), tf.reduce_mean(tf.square(dbydy))])
-#c4       = parser.parse_args().area*(tf.pow((area-r_area)/r_area,2)) #1e-2
-#
-#cost     = tf.add_n([c1 , c2, c3, c4])
-#
-#optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost, global_step=global_step)
-#optimizer = tf.train.RMSPropOptimizer(learning_rate).minimize(cost)
+x = tf.reshape(deconv2[0], [batch_size, 64])
+y = tf.reshape(deconv2[1], [batch_size, 64])
 
-# Initializing the variables
+IK       = np.fft.fftfreq(64)*1j
+IK       = IK.astype(np.dtype('complex64'))
+dbydx    = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.complex(x, 0.0)))))
+dbydy    = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.complex(y, 0.0)))))
+length   = tf.reduce_sum(tf.sqrt(tf.add(tf.square(dbydx),tf.square(dbydy))), 1)
+area     = tf.reduce_sum(tf.add(tf.multiply(x,dbydy),-1*tf.multiply(y,dbydx)), 1)
+
+r_x = tf.reshape(X, [batch_size, 64])
+r_y = tf.reshape(Y, [batch_size, 64])
+r_dbydx    = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.complex(r_x, 0.0)))))
+r_dbydy    = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.complex(r_y, 0.0)))))
+r_length   = tf.reduce_sum(tf.sqrt(tf.add(tf.square(r_dbydx),tf.square(r_dbydy))), 1)
+r_area     = tf.reduce_sum(tf.add(tf.multiply(r_x,r_dbydy),-1*tf.multiply(r_y,r_dbydx)), 1)
+
+c1       = tf.add_n([tf.reduce_sum(tf.pow(y - r_y, 2)), tf.reduce_sum(tf.pow(x - r_x, 2)), reg_term])
+c2       = parser.parse_args().roughness*tf.add_n([tf.reduce_sum(tf.square(dbydx)), tf.reduce_sum(tf.square(dbydy))])
+c3       = parser.parse_args().length*tf.reduce_sum(tf.pow(length-r_length,2))
+c4       = parser.parse_args().area*tf.reduce_sum(tf.pow((area-r_area)/r_area,2)) #1e-2
+
+cost     = tf.add_n([c1 , c2, c3, c4])
+
+optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost)
+
 """
 class saveHook(tf.train.SessionRunHook):
 def after_run(self, run_context, fuckit):
@@ -161,7 +152,7 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave/",
 #    pass
     batch = data.getBatch()
     while not mon_sess.should_stop():
-        cv1,pl1,cv2,pl2,f1, enc_val =  mon_sess.run([conv1,pool1,conv2,pool2,fc1, enc], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        decx, decy, enc_val, c =  mon_sess.run([x, y, enc, cost], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         #print(enc_val)
         pdb.set_trace()
         #costs.append(c)
