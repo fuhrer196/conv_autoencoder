@@ -34,16 +34,16 @@ data            = sio.loadmat("inp.mat")
 x = data["x"]
 y = data["y"]
 
-X = tf.placeholder("float32", [None, 64,1])
-Y = tf.placeholder("float32", [None, 64,1])
+X = tf.placeholder("float32", [None, 64, 1])
+Y = tf.placeholder("float32", [None, 64, 1])
 conv1 = []; pool1 = []; conv2 = []; pool2 = []; fc1=[];
 for i, Dim in enumerate([X,Y]):
-    conv1.append(tf.layers.conv1d(Dim, p, w, data_format="channels_last"))
-    pool1.append(tf.layers.average_pooling1d(conv1[i],2,2))
-    conv2.append(tf.layers.conv1d(pool1[i],p*(p-1)/2,w))
-    pool2.append(tf.layers.average_pooling1d(conv2[i],4,4))
+    conv1.append(tf.layers.conv1d(Dim, p, w, data_format="channels_last"))                                 #(?,4,60 (+4))
+    pool1.append(tf.layers.average_pooling1d(conv1[i],2,2, data_format="channels_last"))                   #(?,4,30 (+2))
+    conv2.append(tf.layers.conv1d(pool1[i],int(p*(p-1)/2),w, data_format="channels_last"))                 #(?,32,6)
+    pool2.append(tf.layers.average_pooling1d(conv2[i],4,4, data_format="channels_last"))                   #(?,8,6)
     #for channel in X[]:
-    fc1.append(tf.layers.dense(pool2[i],8))
+    fc1.append(tf.layers.dense(tf.transpose(pool2[i], perm=[0,2,1]),8))                                                                 #(?,6,8)
     #fc1.unroll()
 
 enc = tf.layers.dense(tf.concat([fc1[0],fc1[1]],0),20)
@@ -127,6 +127,7 @@ f = open('costs' +"_"+hostname+"_"+ str(parser.parse_args().res_n), 'w')
 
 costs = []
 """
+
 global_step = tf.Variable(0, name='global_step', trainable=False)
 hooks = []
 with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave/",
@@ -137,8 +138,8 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave/",
 #    pass
 
     while not mon_sess.should_stop():
-        f1, enc_val =  mon_sess.run([fc1, enc], feed_dict={X: np.transpose([np.transpose(x[:10])]),Y: np.transpose([np.transpose(y[:10])])})
-        print(enc_val)
+        cv1,pl1,cv2,pl2,f1, enc_val =  mon_sess.run([conv1,pool1,conv2,pool2,fc1, enc], feed_dict={X: np.transpose([x[:10]],(1,2,0)),Y: np.transpose([y[:10]],(1,2,0)) })
+        #print(enc_val)
         pdb.set_trace()
         #costs.append(c)
         #print(hostname +": "+ str(c))
