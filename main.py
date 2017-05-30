@@ -157,7 +157,7 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave/",
 #    pass
     batch = data.getBatch()
     while not mon_sess.should_stop():
-        cv1,pl1,cv2,pl2,f1, enc_val =  mon_sess.run([conv1,pool1,conv2,pool2,fc1, enc], feed_dict={X: np.transpose([batch["x"][:10]],(1,2,0)),Y: np.transpose([batch["y"][:10]],(1,2,0)) })
+        cv1,pl1,cv2,pl2,f1, enc_val =  mon_sess.run([conv1,pool1,conv2,pool2,fc1, enc], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         #print(enc_val)
         pdb.set_trace()
         #costs.append(c)
