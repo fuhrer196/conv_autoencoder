@@ -36,8 +36,6 @@ save_to         = "result" + parser.parse_args().res_n
 batch_size = parser.parse_args().batch_size
 data = DataWrapper(filename=parser.parse_args().inp_filename, batch_size=batch_size)
 
-x = data["x"]
-y = data["y"]
 
 X = tf.placeholder("float32", [None, 64, 1])
 Y = tf.placeholder("float32", [None, 64, 1])
