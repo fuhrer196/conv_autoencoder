@@ -30,6 +30,7 @@ learning_rate   = parser.parse_args().learning_rate
 training_epochs = parser.parse_args().training_epochs
 save_to         = "result" + parser.parse_args().res_n
 
+batch_size = 10
 data            = sio.loadmat("inp.mat")
 x = data["x"]
 y = data["y"]
@@ -43,10 +44,12 @@ for i, Dim in enumerate([X,Y]):
     conv2.append(tf.layers.conv1d(pool1[i],int(p*(p-1)/2),w, data_format="channels_last"))                 #(?,32,6)
     pool2.append(tf.layers.average_pooling1d(conv2[i],4,4, data_format="channels_last"))                   #(?,8,6)
     #for channel in X[]:
-    fc1.append(tf.layers.dense(tf.transpose(pool2[i], perm=[0,2,1]),8))                                                                 #(?,6,8)
+    fc1.append(tf.layers.dense(tf.transpose(pool2[i], perm=[0,2,1]),8))                                    #(?,6,8)
     #fc1.unroll()
 
-enc = tf.layers.dense(tf.concat([fc1[0],fc1[1]],0),20)
+conc        = tf.concat([fc1[0],fc1[1]], -1)
+reshaped    = tf.reshape( conc , [batch_size,p*(p-1)*8]) 
+enc = tf.layers.dense( reshaped,20 )
 
 #DECODE
 
