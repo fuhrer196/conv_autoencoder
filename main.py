@@ -44,15 +44,18 @@ for i, Dim in enumerate([X,Y]):
     #fc1.unroll()
 
 enc = tf.layers.dense(tf.concat([fc1[0],fc1[1]]),16)
-fc_deconv = tf.split(tf.layers.dense(enc, 16), num_or_size_splits=2)
+
+#DECODER
+fc_deconv = tf.split(tf.layers.dense(enc, 16*p*(p-1)/2), num_or_size_splits=2, axis=1)
 fc_deconv2 = [tf.layers.dense(i, 8*p*(p-1)/2) for i in fc_deconv]
 
 enc_2 = [tf.reshape(i, [batch_size, 8, 1, p*(p-1)/2]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
-#DECODE
-conv1_d = [0, 0]
-pool1_d = [0, 0]
+
+deconv1 = [0, 0]
+deconv2 = [0, 0]
 filter_deconv2 = [0, 0]
 filter_deconv1 = [0, 0]
+
 for i in xrange(2):
     filter_deconv1[i] = tf.Variable(tf.random_normal([w, 1, p, p*(p-1)/2], stddev=0.5))
     deconv1[i] = tf.nn.conv2d_transpose(enc_2[i], filter_deconv1[i], output_shape=[batch_size, 32, 1, p], strides=[1, 4, 4, 1])
