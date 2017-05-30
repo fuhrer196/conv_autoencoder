@@ -34,21 +34,33 @@ X = tf.placeholder("floa32", [None, 64])
 Y = tf.placeholder("floa32", [None, 64])
 
 for i, Dim in enumerate([X,Y]):
-    conv1[i]  = tf.layers.conv1d(Dim, p,w,data_format="channels_last")
-    pool1[i]  = tf.layers.average_pooling1d(conv1,2,2)
-    conv2[i]  = tf.layers.conv1d(pool1,p*(p-1)/2,w)
-    pool2[i]  = tf.layers.average_pooling1d(conv2,4,4)
+    conv1[i]  = tf.layers.conv1d(Dim, p,w,data_format="channels_last", padding='SAME')
+    pool1[i]  = tf.layers.average_pooling1d(conv1, 2, 2)
+    conv2[i]  = tf.layers.conv1d(pool1, p*(p-1)/2, w, padding='SAME')
+    pool2[i]  = tf.layers.average_pooling1d(conv2, 4, 4)
+
     #for channel in X[]:
     fc1[i]    = tf.layers.dense(pool2,8)
     #fc1.unroll()
 
-enc = tf.layers.dense(tf.concat([fc1[0],fc1[1]]),20)
+enc = tf.layers.dense(tf.concat([fc1[0],fc1[1]]),16)
+fc_deconv = tf.split(tf.layers.dense(enc, 16), num_or_size_splits=2)
+fc_deconv2 = [tf.layers.dense(i, 8*p*(p-1)/2) for i in fc_deconv]
 
+enc_2 = [tf.reshape(i, [batch_size, 8, 1, p*(p-1)/2]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
 #DECODE
+conv1_d = [0, 0]
+pool1_d = [0, 0]
+filter_deconv2 = [0, 0]
+filter_deconv1 = [0, 0]
+for i in xrange(2):
+    filter_deconv1[i] = tf.Variable(tf.random_normal([w, 1, p, p*(p-1)/2], stddev=0.5))
+    deconv1[i] = tf.nn.conv2d_transpose(enc_2[i], filter_deconv1[i], output_shape=[batch_size, 32, 1, p], strides=[1, 4, 4, 1])
+    filter_deconv2[i] = tf.Variable(tf.random_normal([w, 1, 1, p], stddev=0.5))
+    deconv2[i] = tf.nn.conv2d_transpose(deconv1[i], filter_deconv2[i], output_shape=[batch_size, 64, 1, 1], strides=[1, 2, 2, 1])
 
-
-#decX = ...
-#decY = ...
+decX = tf.reshape(deconv2[0], [batch_size, 64])
+decY = tf.reshape(deconv2[1], [batch_size, 64])
 
 
 y_true = tf.concat(X,Y)
