@@ -156,7 +156,7 @@ class saveHook(tf.train.SessionRunHook):
         sio.savemat(save_to+".mat",tosave)
 
         batch = data.getValidationData()
-
+        val_size = len(batch["x"])
         start = timer()
         y_pred, x_pred, cst_val, reg, c_l2, c_area, c_ln,c_roughness = sess.run([y, x, cost, reg_term,c1,c4,c3,c2], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         val_time = timer() - start
@@ -195,12 +195,12 @@ class saveHook(tf.train.SessionRunHook):
                     logger = csv.writer(logfile, delimiter=',')
                     logger.writerow(['Run no.', 'Number of Epochs', 'Batch_size', 'Train time',
                                      'Cost on train', 'Validation time', 'Cost on validation',
-                                     'Learning Rate', 'Length loss', 'Area loss', 'Roughness loss',
-                                     'Regularisation'])
+                                     'Learning Rate', 'Length coeff', 'Area coeff', 'Roughness coeff',
+                                     'Regularisation ceoff'])
             with open('log.csv', 'ab') as logfile:
                 logger = csv.writer(logfile, delimiter=',')
                 logger.writerow([parser.parse_args().res_n, sess.run(global_step), batch_size, self.train_time,
-                                 costs[-1]/batch_size, val_time, cst_val, learning_rate, parser.parse_args().length,
+                                 costs[-1]/batch_size, val_time, cst_val/val_size, learning_rate, parser.parse_args().length,
                                  parser.parse_args().area, parser.parse_args().roughness, alpha]) 
 hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
