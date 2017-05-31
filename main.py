@@ -76,8 +76,10 @@ d_fc1 = [tf.maximum(i, -0.01 * i) for i in d_fc1] #[(b,6,8),(b,6,8)]
 
 d_pool2 = [tf.reshape(tf.transpose(tf.concat([[i],[i],[i],[i]],axis=0),[1,2,3,0]),[-1,int(p*(p-1)/2),32]) for i in d_fc1] #[(b,6,32),...]
 d_conv2 = [tf.layers.conv1d(i,p,w,kernel_regularizer=regularizer, data_format="channels_first", padding='same') for i in d_pool2]  #[(b,6,32)]
+d_conv2 = [tf.maximum(i, -0.01 * i) for i in d_conv2]
 d_pool1 = [tf.reshape(tf.transpose(tf.concat([[i],[i]],axis=0),[1,2,3,0]),[-1,p,64]) for i in d_conv2] #[(b,6,64)]
 d_conv1 = [tf.layers.conv1d(i,1,w,kernel_regularizer=regularizer, data_format="channels_first", padding='same') for i in d_pool1] #[b,1,64]
+d_conv1 = [tf.maximum(i, -0.01 * i) for i in d_conv1]
 
 # dec_1 = [tf.reshape(i, [-1, 8, 1, int(p*(p-1)/2)]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
 
@@ -141,7 +143,8 @@ class saveHook(tf.train.SessionRunHook):
                         'learning_rate': learning_rate,
                         'training_epochs':training_epochs,
                         'alpha_reg': alpha,
-                        'costs':costs}
+                        'costs':costs,
+                        'regs':regs,}
             sio.savemat("live" + str(parser.parse_args().res_n) + ".mat",tosave)
     def end(self, sess):
         batch = data.getBatch()
@@ -153,6 +156,7 @@ class saveHook(tf.train.SessionRunHook):
                     'learning_rate': learning_rate,
                     'training_epochs':training_epochs,
                     'alpha_reg': alpha,
+                    'regs':regs,
                     'costs':costs}
         sio.savemat(save_to+".mat",tosave)
 
@@ -180,6 +184,7 @@ hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
 
 costs = []
+regs = []
 
 f = open('costs'+str(parser.parse_args().res_n)+'.csv', 'a')
 
@@ -187,11 +192,10 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.
                                        hooks=hooks) as mon_sess:
 
     batch = data.getBatch()
-    #enc,dfc1 =  mon_sess.run([enc, d_fc1], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
-    y_pred, x_pred = mon_sess.run([y, x], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
     while not mon_sess.should_stop():
-        _, cst, gs =  mon_sess.run([optimizer, cost, global_step], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        _, cst,reg, gs =  mon_sess.run([optimizer, cost, reg_term, global_step], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         costs.append(cst)
+        regs.append(reg)
         f.write(str(cst)+"\n")
 print("Optimization Finished!") 
 f.close()
