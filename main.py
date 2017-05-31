@@ -114,6 +114,8 @@ optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost, global_step=glo
 
 saver = tf.train.Saver()
 class saveHook(tf.train.SessionRunHook):
+    def begin(self):
+        self.train_time = timer()
     def after_run(self, run_context, fuckit):
         sess = run_context.session
         batch = data.getBatch()
@@ -130,7 +132,7 @@ class saveHook(tf.train.SessionRunHook):
                         'regs':regs,}
             sio.savemat("live" + str(parser.parse_args().res_n) + ".mat",tosave)
     def end(self, sess):
-        log_time = timer()
+        self.train_time = timer() - self.train_time
         batch = data.getBatch()
         y_pred, x_pred = sess.run([y, x], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         tosave = {  'x_act':batch["x"],
@@ -141,7 +143,7 @@ class saveHook(tf.train.SessionRunHook):
                     'training_epochs':training_epochs,
                     'alpha_reg': alpha,
                     'regs':regs,
-                    'train_time': train_time,
+                    'train_time': self.train_time,
                     'costs':costs}
         sio.savemat(save_to+".mat",tosave)
 
@@ -169,7 +171,6 @@ class saveHook(tf.train.SessionRunHook):
                     'y_pred':y_pred,
                     'cost':cst,}
         sio.savemat("test" + str(parser.parse_args().res_n) + ".mat",tosave)
-        log_time = timer() - log_time
 hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
 
@@ -182,12 +183,12 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.
                                        hooks=hooks) as mon_sess:
 
     batch = data.getBatch()
-    train_time = timer()
     while not mon_sess.should_stop():
         _, cst,reg, gs =  mon_sess.run([optimizer, cost, reg_term, global_step], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         costs.append(cst)
         regs.append(reg)
         f.write(str(cst)+"\n")
-    train_time = timer() - train_time - log_time
+
 print("Optimization Finished!") 
 f.close()
+
