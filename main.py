@@ -101,12 +101,12 @@ r_dbydy    = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.complex(r_y, 0.0)))))
 r_length   = tf.reduce_sum(tf.sqrt(tf.add(tf.square(r_dbydx),tf.square(r_dbydy))), 1)
 r_area     = tf.reduce_sum(tf.add(tf.multiply(r_x,r_dbydy),-1*tf.multiply(r_y,r_dbydx)), 1)
 
-c1       = tf.add_n([tf.reduce_sum(tf.pow(y - r_y, 2)), tf.reduce_sum(tf.pow(x - r_x, 2)), reg_term])
+c1       = tf.add_n([tf.reduce_sum(tf.pow(y - r_y, 2)), tf.reduce_sum(tf.pow(x - r_x, 2))])
 c2       = parser.parse_args().roughness*tf.add_n([tf.reduce_sum(tf.square(dbydx)), tf.reduce_sum(tf.square(dbydy))])
 c3       = parser.parse_args().length*tf.reduce_sum(tf.pow(length-r_length,2))
 c4       = parser.parse_args().area*tf.reduce_sum(tf.pow((area-r_area)/r_area,2)) #1e-2
 
-cost     = tf.add_n([c1 , c2, c3, c4])
+cost     = tf.add_n([c1 , c2, c3, c4, reg_term])
 
 global_step = tf.Variable(0, name='global_step', trainable=False)
 
@@ -134,7 +134,7 @@ class saveHook(tf.train.SessionRunHook):
     def end(self, sess):
         self.train_time = timer() - self.train_time
         batch = data.getBatch()
-        y_pred, x_pred = sess.run([y, x], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        y_pred, x_pred, cst, reg, c_l2, c_area, c_ln,c_roughness = sess.run([y, x, cost, reg_term,c1,c4,c3,c2], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         tosave = {  'x_act':batch["x"],
                     'y_act':batch["y"],
                     'x_pred':x_pred,
@@ -144,37 +144,56 @@ class saveHook(tf.train.SessionRunHook):
                     'alpha_reg': alpha,
                     'regs':regs,
                     'train_time': self.train_time,
+                    'l2':c1s,
+                    'len':c3s,
+                    'area':c4s,
+                    'roughness':c2s,
+                    'regs':regs,
                     'costs':costs}
         sio.savemat(save_to+".mat",tosave)
 
         batch = data.getValidationData()
 
         start = timer()
-        y_pred, x_pred, cst, reg = sess.run([y, x, cost, reg_term], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        y_pred, x_pred, cst, reg, c_l2, c_area, c_ln,c_roughness = sess.run([y, x, cost, reg_term,c1,c4,c3,c2], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         val_time = timer() - start
 
         tosave = {  'x_act':batch["x"],
                     'y_act':batch["y"],
                     'x_pred':x_pred,
                     'y_pred':y_pred,
-                    'cost':cst,
+                    'total_cost':cst,
+                    'l2':c1s,
+                    'len':c,
+                    'area':c_area,
+                    'roughness':c_roughness,
                     'val_time': val_time,
-                    'reg':reg_term,
+                    'reg':reg,
                     }
         sio.savemat("validation" + str(parser.parse_args().res_n) + ".mat",tosave)
 
         batch = data.getTestData()
-        y_pred, x_pred, cst = sess.run([y, x, cost], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        y_pred, x_pred, cst, reg, c_l2, c_area, c_ln,c_roughness = sess.run([y, x, cost, reg_term,c1,c4,c3,c2], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         tosave = {  'x_act':batch["x"],
                     'y_act':batch["y"],
                     'x_pred':x_pred,
                     'y_pred':y_pred,
-                    'cost':cst,}
+                    'total_cost':cst,
+                    'l2':c_l2,
+                    'len':c_ln,
+                    'area':c_area,
+                    'roughness':c_roughness,
+                    'reg':reg,
+                    }
         sio.savemat("test" + str(parser.parse_args().res_n) + ".mat",tosave)
 hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
 
 costs = []
+c1s = []
+c2s = []
+c3s = []
+c4s = []
 regs = []
 
 f = open('costs'+str(parser.parse_args().res_n)+'.csv', 'a')
@@ -184,11 +203,14 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.
 
     batch = data.getBatch()
     while not mon_sess.should_stop():
-        _, cst,reg, gs =  mon_sess.run([optimizer, cost, reg_term, global_step], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        _, cst,reg, gs,lc1,lc2,lc3,lc4 =  mon_sess.run([optimizer, cost, reg_term, global_step, c1,c2,c3,c4], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         costs.append(cst)
+        c1s.append(lc1)
+        c2s.append(lc2)
+        c3s.append(lc3)
+        c4s.append(lc4)
         regs.append(reg)
-        f.write(str(cst)+"\n")
-
+        f.write(str(cst)+','+str(c1)+','+str(c2)+','+str(c3)+','+str(c4)+','+str(reg)+"\n")
 print("Optimization Finished!") 
 f.close()
 
