@@ -42,22 +42,27 @@ Y = tf.placeholder("float32", [None, 64, 1])
 conv1 = []; pool1 = []; conv2 = []; pool2 = []; fc1=[];
 for i, Dim in enumerate([X,Y]):
     conv1.append(tf.layers.conv1d(Dim, p, w, kernel_regularizer=regularizer, data_format="channels_last"))                                 #(?,4,60 (+4))
+    conv1[i] = tf.maximum(conv1[i], -0.01*conv1[i])
     pool1.append(tf.layers.average_pooling1d(conv1[i],2,2, data_format="channels_last"))                   #(?,4,30 (+2))
     conv2.append(tf.layers.conv1d(pool1[i],int(p*(p-1)/2),w, kernel_regularizer=regularizer, data_format="channels_last"))                 #(?,32,6)
+    conv2[i] = tf.maximum(conv2[i], -0.01*conv2[i])
     pool2.append(tf.layers.average_pooling1d(conv2[i],4,4, data_format="channels_last"))                   #(?,8,6)
     #for channel in X[]:
     fc1.append(tf.layers.dense(tf.transpose(pool2[i], perm=[0,2,1]),8, kernel_regularizer=regularizer))                                    #(?,6,8)
+    fc1[i] = tf.maximum(fc1[i], -0.01*fc1[i])
     #fc1.unroll()
 
 conc        = tf.concat([fc1[0],fc1[1]], -1)
-reshaped    = tf.reshape( conc , [batch_size,p*(p-1)*8]) 
+reshaped    = tf.reshape( conc , [-1,p*(p-1)*8]) 
 enc = tf.layers.dense( reshaped, 20, kernel_regularizer=regularizer)
+enc = tf.maximum(enc, -0.01 * enc)
 
 #DECODER
 fc_deconv = tf.split(tf.layers.dense(enc, int(16*p*(p-1)/2), kernel_regularizer=regularizer), num_or_size_splits=2, axis=1)
+fc_deconv = [tf.maximum(i, -0.01 * i) for i in fc_deconv]
 fc_deconv2 = [tf.layers.dense(i, int(8*p*(p-1)/2), kernel_regularizer=regularizer) for i in fc_deconv]
-
-dec_1 = [tf.reshape(i, [batch_size, 8, 1, int(p*(p-1)/2)]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
+fc_deconv2 = [tf.maximum(i, -0.01 * i) for i in fc_deconv2]
+dec_1 = [tf.reshape(i, [-1, 8, 1, int(p*(p-1)/2)]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
 
 deconv1 = [0, 0]
 deconv2 = [0, 0]
@@ -65,19 +70,20 @@ filter_deconv2 = [0, 0]
 filter_deconv1 = [0, 0]
 
 for i in xrange(2):
-
     filter_deconv1[i] = tf.Variable(tf.random_normal([w, 1, p, int(p*(p-1)/2)], stddev=0.5))
-    deconv1[i] = tf.nn.conv2d_transpose(enc_2[i], filter_deconv1[i], output_shape=[batch_size, 32, 1, p], strides=[1, 4, 4, 1])
+    deconv1[i] = tf.nn.conv2d_transpose(dec_1[i], filter_deconv1[i], output_shape=[batch_size,32, 1, p], strides=[1, 4, 4, 1])
+    deconv1[i] = tf.maximum(deconv1[i], -0.01 * deconv1[i])
     filter_deconv2[i] = tf.Variable(tf.random_normal([w, 1, 1, p] , stddev=0.5))
-    deconv2[i] = tf.nn.conv2d_transpose(deconv1[i], filter_deconv2[i], output_shape=[batch_size, 64, 1, 1], strides=[1, 2, 2, 1])
+    deconv2[i] = tf.nn.conv2d_transpose(deconv1[i], filter_deconv2[i], output_shape=[batch_size,64, 1, 1], strides=[1, 2, 2, 1])
+    deconv2[i] = tf.maximum(deconv2[i], -0.01 * deconv2[i])
 
     tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES,regularizer(filter_deconv1[i]))
     tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES,regularizer(filter_deconv2[i]))
 
 reg_term = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
-x = tf.reshape(deconv2[0], [batch_size, 64])
-y = tf.reshape(deconv2[1], [batch_size, 64])
+x = tf.reshape(deconv2[0], [-1, 64])
+y = tf.reshape(deconv2[1], [-1, 64])
 
 IK       = np.fft.fftfreq(64)*1j
 IK       = IK.astype(np.dtype('complex64'))
@@ -86,8 +92,8 @@ dbydy    = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.complex(y, 0.0)))))
 length   = tf.reduce_sum(tf.sqrt(tf.add(tf.square(dbydx),tf.square(dbydy))), 1)
 area     = tf.reduce_sum(tf.add(tf.multiply(x,dbydy),-1*tf.multiply(y,dbydx)), 1)
 
-r_x = tf.reshape(X, [batch_size, 64])
-r_y = tf.reshape(Y, [batch_size, 64])
+r_x = tf.reshape(X, [-1, 64])
+r_y = tf.reshape(Y, [-1, 64])
 r_dbydx    = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.complex(r_x, 0.0)))))
 r_dbydy    = tf.real(tf.ifft(tf.multiply(IK,tf.fft(tf.complex(r_y, 0.0)))))
 r_length   = tf.reduce_sum(tf.sqrt(tf.add(tf.square(r_dbydx),tf.square(r_dbydy))), 1)
@@ -100,64 +106,54 @@ c4       = parser.parse_args().area*tf.reduce_sum(tf.pow((area-r_area)/r_area,2)
 
 cost     = tf.add_n([c1 , c2, c3, c4])
 
-optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost)
+global_step = tf.Variable(0, name='global_step', trainable=False)
 
-"""
+optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost, global_step=global_step)
+
+saver = tf.train.Saver()
 class saveHook(tf.train.SessionRunHook):
-def after_run(self, run_context, fuckit):
-    sess = run_context.session
-    if global_step.eval(session=sess)%100 == 0:
-        y_predict = sess.run(y_pred, feed_dict={X: train})
-        y_predict_test = sess.run(y_pred, feed_dict={X: test})
-        tosave = {  'training_y_act':train,
-                'training_y_pred':y_predict,
-                'type':"Leaky ReLu 128(input) -> "+str(n_hidden_1)+" -> "+str(n_hidden_2)+"-> "+str(n_hidden_3)+"-> "+str(n_hidden_4)+"-> "+str(n_hidden_5)+" (->"+ str(n_hidden_1) + "... Decode)",
-                'learning_rate': learning_rate,
-                'training_epochs':training_epochs,
-                'alpha_reg': alpha,
-                'test_y_act':test,
-                'test_y_pred':y_predict_test,
-                'costs':costs}
-        sio.savemat("live" + str(parser.parse_args().res_n) + ".mat",tosave)
-def end(self, sess):
-    y_predict = sess.run(y_pred, feed_dict={X: train})
-    y_predict_test = sess.run(y_pred, feed_dict={X: test})
-    tosave = {  'training_y_act':train,
-            'training_y_pred':y_predict,
-            'type':"Leaky ReLu 128(input) -> "+str(n_hidden_1)+" -> "+str(n_hidden_2)+"-> "+str(n_hidden_3)+"-> "+str(n_hidden_4)+"-> "+str(n_hidden_5)+" (->"+ str(n_hidden_1) + "... Decode)",
-            'learning_rate': learning_rate,
-            'training_epochs':training_epochs,
-            'alpha_reg': alpha,
-            'test_y_act':test,
-            'test_y_pred':y_predict_test,
-            'costs':costs}
-    sio.savemat(save_to+".mat",tosave)
-    saver.save(sess, "./savedSession"+str(n_hidden_5)+"/model",global_step = global_step)
+    def after_run(self, run_context, fuckit):
+        sess = run_context.session
+        batch = data.getBatch()
+        if global_step.eval(session=sess)%5000 == 0:
+            y_pred, x_pred = sess.run([y, x], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+            tosave = {  'x_act':batch["x"],
+                        'y_act':batch["y"],
+                        'x_pred':x_pred,
+                        'y_pred':y_pred,
+                        'learning_rate': learning_rate,
+                        'training_epochs':training_epochs,
+                        'alpha_reg': alpha,
+                        'costs':costs}
+            sio.savemat("live" + str(parser.parse_args().res_n) + ".mat",tosave)
+    def end(self, sess):
+        batch = data.getBatch()
+        y_pred, x_pred = sess.run([y, x], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        tosave = {  'x_act':batch["x"],
+                    'y_act':batch["y"],
+                    'x_pred':x_pred,
+                    'y_pred':y_pred,
+                    'learning_rate': learning_rate,
+                    'training_epochs':training_epochs,
+                    'alpha_reg': alpha,
+                    'costs':costs}
+        sio.savemat(save_to+".mat",tosave)
 
-hooks=[tf.train.StopAtStepHook(last_step=training_epochs), saveHook()]
+hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
-f.close()
-f = open('costs' +"_"+hostname+"_"+ str(parser.parse_args().res_n), 'w')
 
 costs = []
-"""
 
-global_step = tf.Variable(0, name='global_step', trainable=False)
-hooks = []
-with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave/",
-                                       hooks=None) as mon_sess:
-#try:
-#    saver.restore(sess,"./savedSession"+str(n_hidden_5)+"/model")
-#except:
-#    pass
+f = open('costs'+str(parser.parse_args().res_n)+'.csv', 'a')
+
+with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.parse_args().res_n)+"/",
+                                       hooks=hooks) as mon_sess:
+
     batch = data.getBatch()
     while not mon_sess.should_stop():
-        decx, decy, enc_val, c =  mon_sess.run([x, y, enc, cost], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
-        #print(enc_val)
-        pdb.set_trace()
-        #costs.append(c)
-        #print(hostname +": "+ str(c))
-        #f.write(hostname +": "+ str(c)+'\n')
+        _, cst, gs =  mon_sess.run([optimizer, cost, global_step], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        costs.append(cst)
+        f.write(str(cst)+"\n")
 
 print("Optimization Finished!")
 f.close()
