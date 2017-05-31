@@ -47,9 +47,9 @@ data = DataWrapper(filename=parser.parse_args().inp_filename, batch_size=batch_s
 if restart:
     try:
         os.remove('costs'+parser.parse_args().res_n+'.csv')
+        shutil.rmtree('timelySave'+parser.parse_args().res_n)
     except:
-        print("Files costs[n].csv or result[n].mat do not exist")
-    shutil.rmtree('timelySave'+parser.parse_args().res_n)
+        print("One or more of costs[n].csv, result[n].mat, timelySave[n] missing")
 
 X = tf.placeholder("float32", [None, 64, 1])
 Y = tf.placeholder("float32", [None, 64, 1])
@@ -199,8 +199,8 @@ class saveHook(tf.train.SessionRunHook):
                                      'Regularisation'])
             with open('log.csv', 'ab') as logfile:
                 logger = csv.writer(logfile, delimiter=',')
-                logger.writerow([parser.parse_args().res_n, training_epochs, batch_size, self.train_time,
-                                 costs[-1], val_time, cst_val, learning_rate, parser.parse_args().length,
+                logger.writerow([parser.parse_args().res_n, sess.run(global_step), batch_size, self.train_time,
+                                 costs[-1]/batch_size, val_time, cst_val, learning_rate, parser.parse_args().length,
                                  parser.parse_args().area, parser.parse_args().roughness, alpha]) 
 hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
