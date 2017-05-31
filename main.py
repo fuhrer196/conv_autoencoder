@@ -12,6 +12,7 @@ parser.add_argument('--length', action="store", dest="length", type=float, defau
 parser.add_argument('--area', action="store", dest="area", type=float, default=0.001, help="Coefficient of area penalty(default 0.0005)")
 parser.add_argument('--roughness', action="store", dest="roughness", type=float, default=5.0, help="Coefficient of roughness penalty(default 0.0005)")
 
+parser.add_argument('--restart', dest='restart', default=False, action='store_true')
 parser.add_argument('--data', action="store", dest="inp_filename", required=False, default="inp.mat", help="Filename of .mat datafile. Defaults to 'inp.mat'. Format: {x:xdata, y:ydata}")
 parser.parse_args()
 
@@ -22,6 +23,7 @@ import matplotlib.pyplot as plt
 import scipy.io as sio
 import pdb
 import os
+import shutil
 from data_handler import DataWrapper
 import tensorflow as tf
 
@@ -34,8 +36,16 @@ training_epochs = parser.parse_args().training_epochs
 save_to         = "result" + parser.parse_args().res_n
 regularizer = tf.contrib.layers.l2_regularizer(alpha)
 batch_size = parser.parse_args().batch_size
+restart = parser.parse_args().restart
 data = DataWrapper(filename=parser.parse_args().inp_filename, batch_size=batch_size)
 
+
+if restart:
+    try:
+        os.remove('costs'+parser.parse_args().res_n+'.csv')
+    except:
+        print("Files costs[n].csv or result[n].mat do not exist")
+    shutil.rmtree('timelySave'+parser.parse_args().res_n)
 
 X = tf.placeholder("float32", [None, 64, 1])
 Y = tf.placeholder("float32", [None, 64, 1])
