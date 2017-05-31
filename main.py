@@ -55,15 +55,19 @@ for i, Dim in enumerate([X,Y]):
 conc        = tf.concat([fc1[0],fc1[1]], -1)
 reshaped    = tf.reshape( conc , [-1,p*(p-1)*8])
 enc = tf.layers.dense( reshaped, 20, kernel_regularizer=regularizer)
-enc = tf.maximum(enc, -0.01 * enc)
+enc = tf.maximum(enc, -0.01 * enc) #(b,20)
 
 #DECODER
-d_fc2 = tf.split(tf.layers.dense(enc, int(8*p*(p-1)), kernel_regularizer=regularizer), num_or_size_splits=2, axis=1)
-d_fc2 = [tf.reshape(tf.maximum(i, -0.01 * i),[-1, int(p*(p-1)),8]) for i in d_fc2]
+d_fc2 = tf.split(tf.layers.dense(enc, int(8*p*(p-1)), kernel_regularizer=regularizer), num_or_size_splits=2, axis=1)#[(b,48),(b,48)]
+d_fc2 = [tf.reshape(tf.maximum(i, -0.01 * i),[-1, int(p*(p-1)/2),8]) for i in d_fc2] #[(b,6,8),(b,6,8)]
 
-d_fc1 = [tf.layers.dense(i, 8, kernel_regularizer=regularizer) for i in d_fc2]
-d_fc1 = [tf.maximum(i, -0.01 * i) for i in d_fc1]
+d_fc1 = [tf.layers.dense(i, 8, kernel_regularizer=regularizer) for i in d_fc2] 
+d_fc1 = [tf.maximum(i, -0.01 * i) for i in d_fc1] #[(b,6,8),(b,6,8)]
 
+d_pool2 = [tf.reshape(tf.transpose(tf.concat([[i],[i],[i],[i]],axis=0),[1,2,3,0]),[-1,int(p*(p-1)/2),32]) for i in d_fc1] #[(b,6,32),...]
+d_conv2 = [tf.layers.conv1d(i,p,w,kernel_regularizer=regularizer, data_format="channels_first", padding='same') for i in d_pool2]  #[(b,6,32)]
+d_pool1 = [tf.reshape(tf.transpose(tf.concat([[i],[i]],axis=0),[1,2,3,0]),[-1,p,64]) for i in d_conv2] #[(b,6,64)]
+d_conv1 = [tf.layers.conv1d(i,1,w,kernel_regularizer=regularizer, data_format="channels_first", padding='same') for i in d_pool1] #[b,1,64]
 
 # dec_1 = [tf.reshape(i, [-1, 8, 1, int(p*(p-1)/2)]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
 
@@ -85,8 +89,8 @@ d_fc1 = [tf.maximum(i, -0.01 * i) for i in d_fc1]
 
 reg_term = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
-x = tf.reshape(deconv2[0], [-1, 64])
-y = tf.reshape(deconv2[1], [-1, 64])
+x = tf.reshape(d_conv1[0], [-1, 64])
+y = tf.reshape(d_conv1[1], [-1, 64])
 
 IK       = np.fft.fftfreq(64)*1j
 IK       = IK.astype(np.dtype('complex64'))
@@ -153,6 +157,8 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.
                                        hooks=hooks) as mon_sess:
 
     batch = data.getBatch()
+    #enc,dfc1 =  mon_sess.run([enc, d_fc1], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+    y_pred, x_pred = mon_sess.run([y, x], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
     while not mon_sess.should_stop():
         _, cst, gs =  mon_sess.run([optimizer, cost, global_step], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         costs.append(cst)
