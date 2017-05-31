@@ -13,6 +13,7 @@ parser.add_argument('--area', action="store", dest="area", type=float, default=0
 parser.add_argument('--roughness', action="store", dest="roughness", type=float, default=5.0, help="Coefficient of roughness penalty(default 0.0005)")
 
 parser.add_argument('--restart', dest='restart', default=False, action='store_true')
+parser.add_argument('--log', dest='log', default=False, action='store_true')
 parser.add_argument('--data', action="store", dest="inp_filename", required=False, default="inp.mat", help="Filename of .mat datafile. Defaults to 'inp.mat'. Format: {x:xdata, y:ydata}")
 parser.parse_args()
 
@@ -27,6 +28,7 @@ import shutil
 from data_handler import DataWrapper
 import tensorflow as tf
 from timeit import default_timer as timer
+import csv
 
 p = 4 #numchannels
 w = 5 #window
@@ -38,6 +40,7 @@ save_to         = "result" + parser.parse_args().res_n
 regularizer = tf.contrib.layers.l2_regularizer(alpha)
 batch_size = parser.parse_args().batch_size
 restart = parser.parse_args().restart
+log = parser.parse_args().log
 data = DataWrapper(filename=parser.parse_args().inp_filename, batch_size=batch_size)
 
 
@@ -155,14 +158,14 @@ class saveHook(tf.train.SessionRunHook):
         batch = data.getValidationData()
 
         start = timer()
-        y_pred, x_pred, cst, reg, c_l2, c_area, c_ln,c_roughness = sess.run([y, x, cost, reg_term,c1,c4,c3,c2], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        y_pred, x_pred, cst_val, reg, c_l2, c_area, c_ln,c_roughness = sess.run([y, x, cost, reg_term,c1,c4,c3,c2], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         val_time = timer() - start
 
         tosave = {  'x_act':batch["x"],
                     'y_act':batch["y"],
                     'x_pred':x_pred,
                     'y_pred':y_pred,
-                    'total_cost':cst,
+                    'total_cost':cst_val,
                     'l2':c_l2,
                     'len':c_ln,
                     'area':c_area,
@@ -186,6 +189,19 @@ class saveHook(tf.train.SessionRunHook):
                     'reg':reg,
                     }
         sio.savemat("test" + str(parser.parse_args().res_n) + ".mat",tosave)
+        if log:
+            if not os.path.exists('log.csv'):
+                with open('log.csv', 'wb') as logfile:
+                    logger = csv.writer(logfile, delimiter=',')
+                    logger.writerow(['Run no.', 'Number of Epochs', 'Batch_size', 'Train time',
+                                     'Cost on train', 'Validation time', 'Cost on validation',
+                                     'Learning Rate', 'Length loss', 'Area loss', 'Roughness loss',
+                                     'Regularisation'])
+            with open('log.csv', 'ab') as logfile:
+                logger = csv.writer(logfile, delimiter=',')
+                logger.writerow([parser.parse_args().res_n, training_epochs, batch_size, self.train_time,
+                                 costs[-1], val_time, cst_val, learning_rate, parser.parse_args().length,
+                                 parser.parse_args().area, parser.parse_args().roughness, alpha]) 
 hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
 
@@ -213,4 +229,5 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.
         f.write(str(cst)+','+str(c1)+','+str(c2)+','+str(c3)+','+str(c4)+','+str(reg)+"\n")
 print("Optimization Finished!") 
 f.close()
+
 
