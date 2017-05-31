@@ -26,6 +26,7 @@ import os
 import shutil
 from data_handler import DataWrapper
 import tensorflow as tf
+from timeit import default_timer as timer
 
 p = 4 #numchannels
 w = 5 #window
@@ -81,24 +82,6 @@ d_pool1 = [tf.reshape(tf.transpose(tf.concat([[i],[i]],axis=0),[1,2,3,0]),[-1,p,
 d_conv1 = [tf.layers.conv1d(i,1,w,kernel_regularizer=regularizer, data_format="channels_first", padding='same') for i in d_pool1] #[b,1,64]
 d_conv1 = [tf.maximum(i, -0.01 * i) for i in d_conv1]
 
-# dec_1 = [tf.reshape(i, [-1, 8, 1, int(p*(p-1)/2)]) for i in fc_deconv2] # height 8, width 1, channel p*(p-1)/2. NHWC
-
-# deconv1 = [0, 0]
-# deconv2 = [0, 0]
-# filter_deconv2 = [0, 0]
-# filter_deconv1 = [0, 0]
-
-# for i in xrange(2):
-#     filter_deconv1[i] = tf.Variable(tf.random_normal([w, 1, p, int(p*(p-1)/2)], stddev=0.5))
-#     deconv1[i] = tf.nn.conv2d_transpose(dec_1[i], filter_deconv1[i], output_shape=[batch_size,32, 1, p], strides=[1, 4, 4, 1])
-#     deconv1[i] = tf.maximum(deconv1[i], -0.01 * deconv1[i])
-#     filter_deconv2[i] = tf.Variable(tf.random_normal([w, 1, 1, p] , stddev=0.5))
-#     deconv2[i] = tf.nn.conv2d_transpose(deconv1[i], filter_deconv2[i], output_shape=[batch_size,64, 1, 1], strides=[1, 2, 2, 1])
-#     deconv2[i] = tf.maximum(deconv2[i], -0.01 * deconv2[i])
-
-#     tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES,regularizer(filter_deconv1[i]))
-#     tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES,regularizer(filter_deconv2[i]))
-
 reg_term = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
 x = tf.reshape(d_conv1[0], [-1, 64])
@@ -147,6 +130,7 @@ class saveHook(tf.train.SessionRunHook):
                         'regs':regs,}
             sio.savemat("live" + str(parser.parse_args().res_n) + ".mat",tosave)
     def end(self, sess):
+        log_time = timer()
         batch = data.getBatch()
         y_pred, x_pred = sess.run([y, x], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         tosave = {  'x_act':batch["x"],
@@ -157,16 +141,22 @@ class saveHook(tf.train.SessionRunHook):
                     'training_epochs':training_epochs,
                     'alpha_reg': alpha,
                     'regs':regs,
+                    'train_time': train_time,
                     'costs':costs}
         sio.savemat(save_to+".mat",tosave)
 
         batch = data.getValidationData()
+
+        start = timer()
         y_pred, x_pred, cst, reg = sess.run([y, x, cost, reg_term], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        val_time = timer() - start
+
         tosave = {  'x_act':batch["x"],
                     'y_act':batch["y"],
                     'x_pred':x_pred,
                     'y_pred':y_pred,
                     'cost':cst,
+                    'val_time': val_time,
                     'reg':reg_term,
                     }
         sio.savemat("validation" + str(parser.parse_args().res_n) + ".mat",tosave)
@@ -179,7 +169,7 @@ class saveHook(tf.train.SessionRunHook):
                     'y_pred':y_pred,
                     'cost':cst,}
         sio.savemat("test" + str(parser.parse_args().res_n) + ".mat",tosave)
-
+        log_time = timer() - log_time
 hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
 
@@ -192,10 +182,12 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.
                                        hooks=hooks) as mon_sess:
 
     batch = data.getBatch()
+    train_time = timer()
     while not mon_sess.should_stop():
         _, cst,reg, gs =  mon_sess.run([optimizer, cost, reg_term, global_step], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         costs.append(cst)
         regs.append(reg)
         f.write(str(cst)+"\n")
+    train_time = timer() - train_time - log_time
 print("Optimization Finished!") 
 f.close()
