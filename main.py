@@ -146,6 +146,26 @@ class saveHook(tf.train.SessionRunHook):
                     'costs':costs}
         sio.savemat(save_to+".mat",tosave)
 
+        batch = data.getValidationData()
+        y_pred, x_pred, cst, reg = sess.run([y, x, cost, reg_term], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        tosave = {  'x_act':batch["x"],
+                    'y_act':batch["y"],
+                    'x_pred':x_pred,
+                    'y_pred':y_pred,
+                    'cost':cst,
+                    'reg':reg_term,
+                    }
+        sio.savemat("validation" + str(parser.parse_args().res_n) + ".mat",tosave)
+
+        batch = data.getTestData()
+        y_pred, x_pred, cst = sess.run([y, x, cost], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
+        tosave = {  'x_act':batch["x"],
+                    'y_act':batch["y"],
+                    'x_pred':x_pred,
+                    'y_pred':y_pred,
+                    'cost':cst,}
+        sio.savemat("test" + str(parser.parse_args().res_n) + ".mat",tosave)
+
 hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
 
@@ -163,6 +183,5 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.
         _, cst, gs =  mon_sess.run([optimizer, cost, global_step], feed_dict={X: np.transpose([batch["x"]],(1,2,0)),Y: np.transpose([batch["y"]],(1,2,0)) })
         costs.append(cst)
         f.write(str(cst)+"\n")
-
-print("Optimization Finished!")
+print("Optimization Finished!") 
 f.close()
