@@ -55,34 +55,34 @@ X = tf.placeholder("float32", [None, 64, 1])
 Y = tf.placeholder("float32", [None, 64, 1])
 conv1 = []; pool1 = []; conv2 = []; pool2 = []; fc1=[];
 for i, Dim in enumerate([X,Y]):
-    conv1.append(tf.layers.conv1d(Dim, p, w, kernel_regularizer=regularizer, kernel_initializer=tf.random_normal_initializer(seed=0), data_format="channels_last"))                                 #(?,4,60 (+4))
+    conv1.append(tf.layers.conv1d(Dim, p, w, kernel_regularizer=regularizer, kernel_initializer=tf.random_normal_initializer(seed=0, stddev=0.00001), data_format="channels_last"))                                 #(?,4,60 (+4))
     conv1[i] = tf.maximum(conv1[i], -0.01*conv1[i])
     pool1.append(tf.layers.max_pooling1d(conv1[i],2,2, data_format="channels_last"))                   #(?,4,30 (+2))
-    conv2.append(tf.layers.conv1d(pool1[i],int(p*(p-1)/2),w, kernel_initializer=tf.random_normal_initializer(seed=0), kernel_regularizer=regularizer, data_format="channels_last"))                 #(?,32,6)
+    conv2.append(tf.layers.conv1d(pool1[i],int(p*(p-1)/2),w, kernel_initializer=tf.random_normal_initializer(seed=0, stddev=0.00001), kernel_regularizer=regularizer, data_format="channels_last"))                 #(?,32,6)
     conv2[i] = tf.maximum(conv2[i], -0.01*conv2[i])
     pool2.append(tf.layers.max_pooling1d(conv2[i],4,4, data_format="channels_last"))                   #(?,8,6)
     #for channel in X[]:
-    fc1.append(tf.layers.dense(tf.transpose(pool2[i], perm=[0,2,1]),8, kernel_initializer=tf.random_normal_initializer(seed=0), kernel_regularizer=regularizer))                                    #(?,6,8)
+    fc1.append(tf.layers.dense(tf.transpose(pool2[i], perm=[0,2,1]),8, kernel_initializer=tf.random_normal_initializer(seed=0, stddev=0.00001), kernel_regularizer=regularizer))                                    #(?,6,8)
     fc1[i] = tf.maximum(fc1[i], -0.01*fc1[i])
     #fc1.unroll()
 
 conc        = tf.concat([fc1[0],fc1[1]], -1)
 reshaped    = tf.reshape( conc , [-1,p*(p-1)*8])
-enc = tf.layers.dense( reshaped, 20, kernel_initializer=tf.random_normal_initializer(seed=0), kernel_regularizer=regularizer)
+enc = tf.layers.dense( reshaped, 20, kernel_initializer=tf.random_normal_initializer(seed=0, stddev=0.00001), kernel_regularizer=regularizer)
 enc = tf.maximum(enc, -0.01 * enc) #(b,20)
 
 #DECODER
-d_fc2 = tf.split(tf.layers.dense(enc, int(8*p*(p-1)), kernel_initializer=tf.random_normal_initializer(seed=0), kernel_regularizer=regularizer), num_or_size_splits=2, axis=1)#[(b,48),(b,48)]
+d_fc2 = tf.split(tf.layers.dense(enc, int(8*p*(p-1)), kernel_initializer=tf.random_normal_initializer(seed=0, stddev=0.00001), kernel_regularizer=regularizer), num_or_size_splits=2, axis=1)#[(b,48),(b,48)]
 d_fc2 = [tf.reshape(tf.maximum(i, -0.01 * i),[-1, int(p*(p-1)/2),8]) for i in d_fc2] #[(b,6,8),(b,6,8)]
 
-d_fc1 = [tf.layers.dense(i, 8, kernel_initializer=tf.random_normal_initializer(seed=0), kernel_regularizer=regularizer) for i in d_fc2] 
+d_fc1 = [tf.layers.dense(i, 8, kernel_initializer=tf.random_normal_initializer(seed=0, stddev=0.00001), kernel_regularizer=regularizer) for i in d_fc2] 
 d_fc1 = [tf.maximum(i, -0.01 * i) for i in d_fc1] #[(b,6,8),(b,6,8)]
 
 d_pool2 = [tf.reshape(tf.transpose(tf.concat([[i],[i],[i],[i]],axis=0),[1,2,3,0]),[-1,int(p*(p-1)/2),32]) for i in d_fc1] #[(b,6,32),...]
-d_conv2 = [tf.layers.conv1d(i,p,w, kernel_initializer=tf.random_normal_initializer(seed=0),kernel_regularizer=regularizer, data_format="channels_first", padding='same') for i in d_pool2]  #[(b,6,32)]
+d_conv2 = [tf.layers.conv1d(i,p,w, kernel_initializer=tf.random_normal_initializer(seed=0, stddev=0.00001),kernel_regularizer=regularizer, data_format="channels_first", padding='same') for i in d_pool2]  #[(b,6,32)]
 d_conv2 = [tf.maximum(i, -0.01 * i) for i in d_conv2]
 d_pool1 = [tf.reshape(tf.transpose(tf.concat([[i],[i]],axis=0),[1,2,3,0]),[-1,p,64]) for i in d_conv2] #[(b,6,64)]
-d_conv1 = [tf.layers.conv1d(i,1,w, kernel_initializer=tf.random_normal_initializer(seed=0),kernel_regularizer=regularizer, data_format="channels_first", padding='same') for i in d_pool1] #[b,1,64]
+d_conv1 = [tf.layers.conv1d(i,1,w, kernel_initializer=tf.random_normal_initializer(seed=0, stddev=0.00001),kernel_regularizer=regularizer, data_format="channels_first", padding='same') for i in d_pool1] #[b,1,64]
 d_conv1 = [tf.maximum(i, -0.01 * i) for i in d_conv1]
 
 reg_term = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
