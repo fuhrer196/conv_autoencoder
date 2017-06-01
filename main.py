@@ -193,15 +193,17 @@ class saveHook(tf.train.SessionRunHook):
             if not os.path.exists('log.csv'):
                 with open('log.csv', 'wb') as logfile:
                     logger = csv.writer(logfile, delimiter=',')
-                    logger.writerow(['Run no.', 'Number of Epochs', 'Batch_size', 'Train time',
-                                     'Cost on train', 'Validation time', 'Cost on validation',
-                                     'Learning Rate', 'Length coeff', 'Area coeff', 'Roughness coeff',
-                                     'Regularisation ceoff'])
+                    logger.writerow(['Run no.'         , 'Number of Epochs'   , 'Batch_size'    , 'Regularisation ceoff' ,
+                                     'Learning Rate'   , 'Length coeff'       , 'Area coeff'    , 'Roughness coeff'      ,
+                                     'Validation time' , 'Cost on validation' , 'Cost on train' , 'Train time'           ,
+                                     'L2 error on training', 'L2 error on validation'])
             with open('log.csv', 'ab') as logfile:
                 logger = csv.writer(logfile, delimiter=',')
-                logger.writerow([parser.parse_args().res_n, sess.run(global_step), batch_size, self.train_time,
-                                 costs[-1]/batch_size, val_time, cst_val/val_size, learning_rate, parser.parse_args().length,
-                                 parser.parse_args().area, parser.parse_args().roughness, alpha]) 
+                logger.writerow([parser.parse_args().res_n , sess.run(global_step)      , batch_size               , alpha                         ,
+                                  learning_rate            , parser.parse_args().length , parser.parse_args().area , parser.parse_args().roughness ,
+                                  val_time                 , cst_val/val_size           , costs[-1]/batch_size     , self.train_time               ,
+                                  c1s[-1]/batch_size       , c_l2/val_size])
+
 hooks=[tf.train.StopAtStepHook(num_steps=training_epochs), saveHook()]
 
 
@@ -226,7 +228,7 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.
         c3s.append(lc3)
         c4s.append(lc4)
         regs.append(reg)
-        f.write(str(cst)+','+str(c1)+','+str(c2)+','+str(c3)+','+str(c4)+','+str(reg)+"\n")
+        f.write(str(cst)+','+str(lc1)+','+str(lc2)+','+str(lc3)+','+str(lc4)+','+str(reg)+"\n")
 print("Optimization Finished!") 
 f.close()
 
