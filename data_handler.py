@@ -22,7 +22,7 @@ class DataWrapper(object):
         self.x = np.delete(self.x,sample,0)
         self.y = np.delete(self.y,sample,0)
 
-        np.random.seed()
+        np.random.seed(314)
 
         self.filename = filename
         self.batch_size = batch_size
