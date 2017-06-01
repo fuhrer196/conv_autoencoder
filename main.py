@@ -54,6 +54,7 @@ if restart:
 X = tf.placeholder("float32", [None, 64, 1])
 Y = tf.placeholder("float32", [None, 64, 1])
 conv1 = []; pool1 = []; conv2 = []; pool2 = []; fc1=[];
+tf.set_random_seed(1)
 for i, Dim in enumerate([X,Y]):
     conv1.append(tf.layers.conv1d(Dim, p, w, kernel_regularizer=regularizer, data_format="channels_last"))                                 #(?,4,60 (+4))
     conv1[i] = tf.maximum(conv1[i], -0.01*conv1[i])
