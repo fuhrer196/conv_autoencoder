@@ -31,7 +31,7 @@ from timeit import default_timer as timer
 import csv
 from tensorflow.python.ops.init_ops import glorot_uniform_initializer
 
-p = 4 #numchannels
+p = 5 #numchannels
 w = 5 #window
 
 alpha           = parser.parse_args().alpha
@@ -77,7 +77,7 @@ enc = tf.maximum(enc, -0.01 * enc) #(b,20)
 d_fc2 = tf.split(tf.layers.dense(enc, int(8*p*(p-1)), kernel_initializer=glorot_uniform_initializer(seed=0), kernel_regularizer=regularizer), num_or_size_splits=2, axis=1)#[(b,48),(b,48)]
 d_fc2 = [tf.reshape(tf.maximum(i, -0.01 * i),[-1, int(p*(p-1)/2),8]) for i in d_fc2] #[(b,6,8),(b,6,8)]
 
-d_fc1 = [tf.layers.dense(i, 8, kernel_initializer=glorot_uniform_initializer(seed=0), kernel_regularizer=regularizer) for i in d_fc2] 
+d_fc1 = [tf.layers.dense(i, 8, kernel_initializer=glorot_uniform_initializer(seed=0), kernel_regularizer=regularizer) for i in d_fc2]
 d_fc1 = [tf.maximum(i, -0.01 * i) for i in d_fc1] #[(b,6,8),(b,6,8)]
 
 d_pool2 = [tf.reshape(tf.transpose(tf.concat([[i],[i],[i],[i]],axis=0),[1,2,3,0]),[-1,int(p*(p-1)/2),32]) for i in d_fc1] #[(b,6,32),...]
@@ -232,7 +232,5 @@ with tf.train.MonitoredTrainingSession(checkpoint_dir="./timelySave"+str(parser.
         c4s.append(lc4)
         regs.append(reg)
         f.write(str(cst)+','+str(lc1)+','+str(lc2)+','+str(lc3)+','+str(lc4)+','+str(reg)+"\n")
-print("Optimization Finished!") 
+print("Optimization Finished!")
 f.close()
-
-
