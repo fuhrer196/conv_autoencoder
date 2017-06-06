@@ -14,7 +14,7 @@ parser.add_argument('--roughness', action="store", dest="roughness", type=float,
 
 parser.add_argument('--restart', dest='restart', default=False, action='store_true')
 parser.add_argument('--log', dest='log', default=False, action='store_true')
-parser.add_argument('--data', action="store", dest="inp_filename", required=False, default="inp.mat", help="Filename of .mat datafile. Defaults to 'inp.mat'. Format: {x:xdata, y:ydata}")
+parser.add_argument('--data', action="store", dest="inp_filename", required=False, default="inp", help="Filename of .mat datafile. Defaults to 'inp'. Format: {x:xdata, y:ydata}")
 parser.parse_args()
 
 import sys
